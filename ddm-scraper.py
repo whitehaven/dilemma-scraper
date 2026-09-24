@@ -1,4 +1,5 @@
 import asyncio
+import re
 import sys
 
 import polars as pl
@@ -11,10 +12,19 @@ logger.add(sys.stderr, level="TRACE")
 
 BASE_URL = "https://ddm.acponline.org/"
 
+question_regex = (
+    r"\s*Q:( |\s)?(?P<question>.*)(.|\s)*^(?P<category>[A-Z]*): (?P<point_value>\d\d)"
+)
+answer_regex = (
+    r"\s*A:( |\s)?(?P<answer>.*)(.|\s)*^(?P<category>[A-Z]*): (?P<point_value>\d\d)"
+)
+output_path = "doctors_dilemma_questions.csv"
+
 
 def run():
+
     with sync_playwright() as p:
-        run_headless = False
+        run_headless = True
         browser = p.chromium.launch(headless=run_headless)
 
         context = browser.new_context()
@@ -50,7 +60,6 @@ def run():
 
             # Click into the game grid
             games[i].click()
-            logger.trace(f"Click completed to {games[i]=}.")
             page.wait_for_load_state("networkidle")
 
             # Query grid cells / point links
@@ -59,6 +68,8 @@ def run():
             ).all()
             q_count = len(question_buttons)
             logger.debug(f"Found {q_count} questions in this grid.")
+
+            # TODO: when runs off page to next year, can't find even though is listed (would be reachable through year links following Show:)
 
             for q_idx in range(q_count):
                 try:
@@ -72,23 +83,20 @@ def run():
                     grid_cells[q_idx].click()
                     page.wait_for_load_state("networkidle")
 
-                    # TODO: doesn't catch anything (returns "NA") and shouldn't; parse the answer for it!! point and system are in it (not the score though, just after the system)
-                    category = (
-                        page.locator("#category, .category-title").inner_text()
-                        if page.locator("#category, .category-title").count()
-                        else "N/A"
-                    )
-                    # TODO: doesn't catch anything (returns "NA") and shouldn't; parse the answer for it!! point and system are in it
-                    points = (
-                        page.locator("#points, .point-value").inner_text()
-                        if page.locator("#points, .point-value").count()
-                        else "N/A"
-                    )
-
                     question_text = page.locator(
                         "#question, .question-text"
                     ).inner_text()
-                    logger.trace(f"Q recovered: {question_text}")
+
+                    question_match = re.search(
+                        question_regex, question_text, re.MULTILINE
+                    )
+
+                    if not question_match:
+                        raise RuntimeError(f"{question_text=}, should match regex")
+
+                    question_parsed_dict = question_match.groupdict()
+
+                    logger.trace(f"{question_parsed_dict=}")
 
                     # Click "Show Answer" button
                     show_answer_btn = page.locator(
@@ -99,21 +107,28 @@ def run():
                         page.wait_for_timeout(300)
 
                     answer_text = page.locator("#answer, .answer-text").inner_text()
-                    logger.trace(f"A recovered: {answer_text}")
 
-                    # Append to list
+                    answer_match = re.search(answer_regex, answer_text, re.MULTILINE)
+
+                    if not answer_match:
+                        raise RuntimeError(f"{answer_text=}, should match regex")
+
+                    answer_parsed_dict = answer_match.groupdict()
+
+                    logger.trace(f"{answer_parsed_dict=}")
+
                     scraped_data.append(
                         {
-                            "Game": game_title.strip(),
-                            "Category": category.strip(),
-                            "Points": points.strip(),
-                            "Question": question_text.strip(),
-                            "Answer": answer_text.strip(),
+                            "Dilemma Game Release": game_title.strip(),
+                            "Category": question_parsed_dict["category"],
+                            "Points": question_parsed_dict["point_value"],
+                            "Question": question_parsed_dict["question"],
+                            "Answer": answer_parsed_dict["answer"],
                         }
                     )
 
                     # Click "I was correct" or "I was incorrect" to return to the grid menu
-                    # TODO: I don't get how this works or if it's necessary at all.
+                    # TODO: I don't get how this works or if it's necessary at all. I don't get the logic. It seems like it goes back and forth answering one button or the other. Maybe based on load order? I don't know. Odd.
                     return_btn = page.locator(
                         "button:has-text('I was correct'), input[value='I was correct']"
                     )
@@ -126,8 +141,10 @@ def run():
 
                     page.wait_for_load_state("networkidle")
 
+                # TODO: also don't know what this is for, probably remove if works
                 except Exception as e:
                     logger.error(f"  Error processing question {q_idx + 1}: {e}")
+                    raise RuntimeError
                     page.goto(BASE_URL)
                     break
 
@@ -138,15 +155,14 @@ def run():
             else:
                 page.goto(BASE_URL)
 
-        # Build Polars DataFrame from dicts
         df = pl.DataFrame(scraped_data)
-
-        output_path = "doctors_dilemma_questions.csv"
+        logger.success(f"{df.glimpse}")
 
         df.write_csv(output_path)
-        logger.success(f"Successfully exported questions to {output_path}")
+        logger.success(f"Successfully exported questions and answers to {output_path}")
 
         browser.close()
 
 
-asyncio.run(run())
+if __name__ == "__main__":
+    run()

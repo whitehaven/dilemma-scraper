@@ -1,19 +1,11 @@
 [project]
-name = "jeopardy-2027"
-version = "0.1.0"
+name = "dilemma-scraper"
+version = "1.0.0dev1"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 dependencies = [
-    "asyncio>=4.0.0",
     "loguru>=0.7.3",
     "playwright>=1.63.0",
     "polars>=1.44.2",
 ]
-
-[project.scripts]
-jeopardy-2027 = "jeopardy_2027:main"
-
-[build-system]
-requires = ["uv_build>=0.12.10,<0.13.0"]
-build-backend = "uv_build"

@@ -72,7 +72,7 @@ def run():
                     grid_cells[q_idx].click()
                     page.wait_for_load_state("networkidle")
 
-                    # TODO: doesn't catch anything (returns "NA") and shouldn't; parse the answer for it!! point and system are in it
+                    # TODO: doesn't catch anything (returns "NA") and shouldn't; parse the answer for it!! point and system are in it (not the score though, just after the system)
                     category = (
                         page.locator("#category, .category-title").inner_text()
                         if page.locator("#category, .category-title").count()

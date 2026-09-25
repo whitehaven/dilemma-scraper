@@ -21,7 +21,16 @@ output_path = "doctors_dilemma_questions.csv"
 year_tab_selector = "a:has-text('20'), button:has-text('20'), a:has-text('Current')"
 board_tag_selector = "a[href*='board']:visible"
 question_selector = "a:has-text('10'), a:has-text('20'), a:has-text('30'), a:has-text('40'), a:has-text('50')"
+question_output_text_selector = "#question, .question-text"
 answer_button_selector = "button:has-text('Show Answer'), input[value='Show Answer']"
+answer_text_output_selector = "#answer, .answer-text"
+menu_button_selector = "a:has-text('Menu'), button:has-text('Menu')"
+incorrect_button_selector = (
+    "button:has-text('I was incorrect'), input[value='I was incorrect']"
+)
+correct_button_selector = (
+    "button:has-text('I was correct'), input[value='I was correct']"
+)
 
 
 def run():
@@ -111,7 +120,7 @@ def run():
                         page.wait_for_load_state("networkidle")
 
                         question_text = page.locator(
-                            "#question, .question-text"
+                            question_output_text_selector
                         ).inner_text()
                         question_match = re.search(
                             question_regex, question_text, re.MULTILINE
@@ -126,7 +135,9 @@ def run():
                             show_answer_btn.click()
                             page.wait_for_timeout(300)
 
-                        answer_text = page.locator("#answer, .answer-text").inner_text()
+                        answer_text = page.locator(
+                            answer_text_output_selector
+                        ).inner_text()
                         answer_match = re.search(
                             answer_regex, answer_text, re.MULTILINE
                         )
@@ -155,16 +166,14 @@ def run():
                         )
 
                         # Click "I was correct" or "I was incorrect" to return to the grid menu
-                        # TODO: I don't get how this works or if it's necessary at all. I don't get the logic. It seems like it goes back and forth answering one button or the other. Maybe based on load order? I don't know. Odd.
-                        return_btn = page.locator(
-                            "button:has-text('I was correct'), input[value='I was correct']"
-                        )
+                        # TODO: I don't get how this works or if it's necessary at all. I don't get the logic. It seems like it goes back and forth answering one button or the other.
+                        #  Maybe based on load order? I don't know. Odd.
+
+                        return_btn = page.locator(correct_button_selector)
                         if return_btn.count() > 0:
                             return_btn.click()
                         else:
-                            page.locator(
-                                "button:has-text('I was incorrect'), input[value='I was incorrect']"
-                            ).click()
+                            page.locator(incorrect_button_selector).click()
 
                         page.wait_for_load_state("networkidle")
 
@@ -177,8 +186,7 @@ def run():
                         page.goto(BASE_URL)
                         break
 
-            # Return to main game menu after finishing grid
-            menu_btn = page.locator("a:has-text('Menu'), button:has-text('Menu')")
+            menu_btn = page.locator(menu_button_selector)
             if menu_btn.count() > 0:
                 menu_btn.click()
             else:

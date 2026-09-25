@@ -83,32 +83,42 @@ def run():
                 page.wait_for_timeout(300)
                 page.wait_for_load_state("networkidle")
 
-                # Query grid cells / point links
                 question_buttons = page.locator(question_selector).all()
-                q_count = len(question_buttons)
-                logger.debug(f"Found {q_count} questions in this grid.")
-                # MAYBE: restructure to requery questions and just pop the [0]
-                for q_idx in range(q_count):
+                initial_q_count = len(question_buttons)
+
+                if initial_q_count == 0:
+                    logger.critical(
+                        f"{initial_q_count=}, no initial questions detected to scrape"
+                    )
+                    raise RuntimeError(
+                        f"{initial_q_count=}, no initial questions detected to scrape"
+                    )
+
+                logger.debug(
+                    f"Found {initial_q_count} questions in this grid at start."
+                )
+
+                q_idx = 0
+
+                while len(question_buttons) > 0:
                     try:
+                        this_question = question_buttons.pop()
+
                         logger.trace(
-                            f"Clicking question {q_idx + 1}/{q_count}, {question_buttons[q_idx]=}"
+                            f"Clicking question {q_idx + 1}/{initial_q_count}, {this_question=}"
                         )
-                        question_buttons[q_idx].click()
+                        this_question.click()
                         page.wait_for_load_state("networkidle")
 
                         question_text = page.locator(
                             "#question, .question-text"
                         ).inner_text()
-
                         question_match = re.search(
                             question_regex, question_text, re.MULTILINE
                         )
-
                         if not question_match:
                             raise RuntimeError(f"{question_text=}, should match regex")
-
                         question_parsed_dict = question_match.groupdict()
-
                         logger.trace(f"{question_parsed_dict=}")
 
                         show_answer_btn = page.locator(answer_button_selector)
@@ -117,16 +127,12 @@ def run():
                             page.wait_for_timeout(300)
 
                         answer_text = page.locator("#answer, .answer-text").inner_text()
-
                         answer_match = re.search(
                             answer_regex, answer_text, re.MULTILINE
                         )
-
                         if not answer_match:
                             raise RuntimeError(f"{answer_text=}, should match regex")
-
                         answer_parsed_dict = answer_match.groupdict()
-
                         logger.trace(f"{answer_parsed_dict=}")
 
                         this_question_data = {
@@ -139,7 +145,7 @@ def run():
                         }
                         scraped_data.append(this_question_data)
                         logger.success(
-                            f"Completed question {q_idx + 1}/{q_count}, appended to collection."
+                            f"Completed question {q_idx + 1}/{initial_q_count}, appended to collection."
                         )
                         logger.trace(
                             f"Completed question contents: {this_question_data=}"
@@ -161,6 +167,8 @@ def run():
                             ).click()
 
                         page.wait_for_load_state("networkidle")
+
+                        q_idx += 1
 
                     # MAYBE: also don't know what this is for, probably remove if works
                     except Exception as e:

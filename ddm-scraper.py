@@ -21,6 +21,7 @@ output_path = "doctors_dilemma_questions.csv"
 year_tab_selector = "a:has-text('20'), button:has-text('20'), a:has-text('Current')"
 board_tag_selector = "a[href*='board']:visible"
 question_selector = "a:has-text('10'), a:has-text('20'), a:has-text('30'), a:has-text('40'), a:has-text('50')"
+answer_button_selector = "button:has-text('Show Answer'), input[value='Show Answer']"
 
 
 def run():
@@ -86,7 +87,7 @@ def run():
                 question_buttons = page.locator(question_selector).all()
                 q_count = len(question_buttons)
                 logger.debug(f"Found {q_count} questions in this grid.")
-#MAYBE: restructure to requery questions and just pop the [0]
+                # MAYBE: restructure to requery questions and just pop the [0]
                 for q_idx in range(q_count):
                     try:
                         logger.trace(
@@ -110,10 +111,7 @@ def run():
 
                         logger.trace(f"{question_parsed_dict=}")
 
-                        # Click "Show Answer" button
-                        show_answer_btn = page.locator(
-                            "button:has-text('Show Answer'), input[value='Show Answer']"
-                        )
+                        show_answer_btn = page.locator(answer_button_selector)
                         if show_answer_btn.count() > 0:
                             show_answer_btn.click()
                             page.wait_for_timeout(300)

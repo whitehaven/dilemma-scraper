@@ -69,36 +69,30 @@ def run():
             logger.debug(f"Found {board_count} visible boards for {year_label}.")
 
             for i in range(len(visible_boards)):
-                # Re-query game links to avoid stale elements after navigating back
-                # visible_boards = page.locator(board_tag_selector).all()
+                # MAYBE: ?need Re-query game links to avoid stale elements after navigating back:
+                # visible_boards = page.locator(board_tag_selector).all()?
                 if i >= len(visible_boards):
                     logger.critical(f"{visible_boards=}, no boards detected to scrape")
                     raise RuntimeError(f"{board_count=}, no boards detected to scrape")
 
                 game_title = visible_boards[i].inner_text()
-                logger.debug(f"\nProcessing Game [{i + 1}/{game_count}]: {game_title}")
+                logger.debug(f"Processing Game [{i + 1}/{game_count}]: {game_title}")
 
-                # Click into the game grid
                 visible_boards[i].click()
+                page.wait_for_timeout(300)
                 page.wait_for_load_state("networkidle")
 
                 # Query grid cells / point links
                 question_buttons = page.locator(question_selector).all()
                 q_count = len(question_buttons)
                 logger.debug(f"Found {q_count} questions in this grid.")
-
-                # TODO: when runs off page to next year, can't find even though is listed (would be reachable through year links following Show:)
-                
-                grid_cells = page.locator(question_selector).all()
-                
+#MAYBE: restructure to requery questions and just pop the [0]
                 for q_idx in range(q_count):
                     try:
-                        
-                        # if q_idx >= len(grid_cells):
-                            # break
-
-                        # Click question point value
-                        grid_cells[q_idx].click()
+                        logger.trace(
+                            f"Clicking question {q_idx + 1}/{q_count}, {question_buttons[q_idx]=}"
+                        )
+                        question_buttons[q_idx].click()
                         page.wait_for_load_state("networkidle")
 
                         question_text = page.locator(
@@ -145,8 +139,16 @@ def run():
                             "Question": question_parsed_dict["question"],
                             "Answer": answer_parsed_dict["answer"],
                         }
-                        logger.debug(f"{this_question_data}") #TODO: describe better
                         scraped_data.append(this_question_data)
+                        logger.success(
+                            f"Completed question {q_idx + 1}/{q_count}, appended to collection."
+                        )
+                        logger.trace(
+                            f"Completed question contents: {this_question_data=}"
+                        )
+                        logger.trace(
+                            f"Scraped data list now contains {len(scraped_data)} elements"
+                        )
 
                         # Click "I was correct" or "I was incorrect" to return to the grid menu
                         # TODO: I don't get how this works or if it's necessary at all. I don't get the logic. It seems like it goes back and forth answering one button or the other. Maybe based on load order? I don't know. Odd.
@@ -162,7 +164,7 @@ def run():
 
                         page.wait_for_load_state("networkidle")
 
-                    # TODO: also don't know what this is for, probably remove if works
+                    # MAYBE: also don't know what this is for, probably remove if works
                     except Exception as e:
                         logger.error(f"  Error processing question {q_idx + 1}: {e}")
                         raise RuntimeError

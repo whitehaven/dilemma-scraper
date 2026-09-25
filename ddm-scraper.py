@@ -19,12 +19,12 @@ answer_regex = (
 )
 output_path = "doctors_dilemma_questions.csv"
 year_tab_selector = "a:has-text('20'), button:has-text('20'), a:has-text('Current')"
-board_tag_selector = "a[href*='board']:visible"
+visible_board_tag_selector = "a[href*='board']:visible"
 question_selector = "a:has-text('10'), a:has-text('20'), a:has-text('30'), a:has-text('40'), a:has-text('50')"
 question_output_text_selector = "#question, .question-text"
 answer_button_selector = "button:has-text('Show Answer'), input[value='Show Answer']"
 answer_text_output_selector = "#answer, .answer-text"
-menu_button_selector = "a:has-text('Menu'), button:has-text('Menu')"
+start_over_button_selector = "a:has-text('Try'), button:has-text('Try')"
 incorrect_button_selector = (
     "button:has-text('I was incorrect'), input[value='I was incorrect']"
 )
@@ -34,61 +34,57 @@ correct_button_selector = (
 
 
 def run():
-
+    #TODO gets stuck reliably on board 2 of 2025, gets a completion screen and wants to find more questions; maybe reassignment because should only have one query ever
     with sync_playwright() as p:
         run_headless = False
         browser = p.chromium.launch(headless=run_headless)
-
         context = browser.new_context()
-
         page = context.new_page()
 
         page.goto(BASE_URL)
-
-        logger.debug(f"started browser, {run_headless=} (should be visible now)")
-
-        game_links = page.locator(board_tag_selector).all()
-        game_count = len(game_links)
-
-        if game_count == 0:
-            logger.critical(f"{game_count=}, no boards detected to scrape")
-            raise RuntimeError(f"{game_count=}, no boards detected to scrape")
-
-        logger.debug(f"Found {game_count} games on main menu.")
-
-        scraped_data = []
+        page.wait_for_load_state("networkidle")
+        logger.debug(f"started browser, {run_headless=}")
 
         year_tabs = page.locator(year_tab_selector).all()
+        initial_tab_count = len(year_tabs)
 
-        logger.debug(f"Found {len(year_tabs)} year tabs.")
-        logger.trace(f"{len(year_tabs)} tabs found, namely: {year_tabs=}")
-
-        if len(year_tabs) == 0:
+        if initial_tab_count == 0:
+            logger.critical(f"{initial_tab_count=}, no tabs detected to scrape")
             raise RuntimeError(f"{len(year_tabs)=}, should be > 0")
 
-        for tab_idx in range(len(year_tabs)):
-            tabs = page.locator(year_tab_selector).all()
-            year_label = tabs[tab_idx].inner_text()
-            logger.debug(f"Navigating to Year Tab: {year_label}")
+        logger.debug(f"Found {initial_tab_count} year tabs.")
+        logger.trace(f"{initial_tab_count} total tabs found, namely: {year_tabs=}")
 
-            tabs[tab_idx].click()
+        tab_idx = 0
+        scraped_data = []
+        while year_tabs:
+            this_tab = year_tabs.pop()
+            this_tab_label = this_tab.inner_text()
+            logger.debug(f"Navigating to Year Tab: {this_tab_label}")
+
+            this_tab.click()
             page.wait_for_load_state("networkidle")
 
-            visible_boards = page.locator(board_tag_selector).all()
-            board_count = len(visible_boards)
-            logger.debug(f"Found {board_count} visible boards for {year_label}.")
+            visible_boards = page.locator(visible_board_tag_selector).all()
+            initial_visible_board_count = len(visible_boards)
+            logger.debug(
+                f"Found {initial_visible_board_count} visible boards for {this_tab_label}."
+            )
+            if len(visible_boards) == 0:
+                logger.critical(f"{visible_boards=}, no boards detected to scrape")
+                raise RuntimeError(
+                    f"{initial_visible_board_count=}, no boards detected to scrape"
+                )
 
-            for i in range(len(visible_boards)):
-                # MAYBE: ?need Re-query game links to avoid stale elements after navigating back:
-                # visible_boards = page.locator(board_tag_selector).all()?
-                if i >= len(visible_boards):
-                    logger.critical(f"{visible_boards=}, no boards detected to scrape")
-                    raise RuntimeError(f"{board_count=}, no boards detected to scrape")
+            board_idx = 0
+            while visible_boards:
+                this_board = visible_boards.pop()
+                this_board_label = this_board.inner_text()
+                logger.debug(
+                    f"Processing Game [{board_idx + 1}/{initial_visible_board_count}], part of {this_tab_label}: {this_board_label}"
+                )
 
-                game_title = visible_boards[i].inner_text()
-                logger.debug(f"Processing Game [{i + 1}/{game_count}]: {game_title}")
-
-                visible_boards[i].click()
+                this_board.click()
                 page.wait_for_timeout(300)
                 page.wait_for_load_state("networkidle")
 
@@ -108,89 +104,78 @@ def run():
                 )
 
                 q_idx = 0
+                while question_buttons:
+                    this_question = question_buttons.pop()
 
-                while len(question_buttons) > 0:
-                    try:
-                        this_question = question_buttons.pop()
+                    logger.trace(
+                        f"Clicking question {q_idx + 1}/{initial_q_count}, {this_question=}"
+                    )
+                    this_question.click()
+                    page.wait_for_load_state("networkidle")
 
-                        logger.trace(
-                            f"Clicking question {q_idx + 1}/{initial_q_count}, {this_question=}"
+                    question_text = page.locator(
+                        question_output_text_selector
+                    ).inner_text()
+                    question_match = re.search(
+                        question_regex, question_text, re.MULTILINE
+                    )
+                    if not question_match:
+                        raise RuntimeError(f"{question_text=}, should match regex")
+                    question_parsed_dict = question_match.groupdict()
+                    logger.trace(f"{question_parsed_dict=}")
+
+                    show_answer_btn = page.locator(answer_button_selector)
+                    if show_answer_btn.count() > 0:
+                        show_answer_btn.click()
+                        page.wait_for_timeout(300)
+
+                    answer_text = page.locator(answer_text_output_selector).inner_text()
+                    answer_match = re.search(answer_regex, answer_text, re.MULTILINE)
+                    if not answer_match:
+                        raise RuntimeError(f"{answer_text=}, should match regex")
+                    answer_parsed_dict = answer_match.groupdict()
+                    logger.trace(f"{answer_parsed_dict=}")
+
+                    this_question_data = {
+                        "Dilemma Game Release": this_board_label.strip(),
+                        "Dilemma Year": this_tab_label,
+                        "Category": question_parsed_dict["category"],
+                        "Points": question_parsed_dict["point_value"],
+                        "Question": question_parsed_dict["question"],
+                        "Answer": answer_parsed_dict["answer"],
+                    }
+                    scraped_data.append(this_question_data)
+                    logger.success(
+                        f"Completed question {q_idx + 1}/{initial_q_count}, appended to collection of {len(scraped_data)} questions."
+                    )
+                    logger.trace(f"Completed question contents: {this_question_data=}")
+                    logger.trace(
+                        f"Question coordinates: tab {tab_idx + 1} ({this_tab_label}) | board {board_idx + 1}"
+                        f"({this_board_label}) | question {q_idx + 1}"
+                    )
+
+                    q_idx += 1
+
+                    return_btn = page.locator(correct_button_selector)
+
+                    if return_btn.count() == 0:
+                        error_output = (
+                            f"Return button not found after Q @ tab {tab_idx + 1} ({this_tab_label})"
+                            f"| board {board_idx + 1} ({this_board_label})"
+                            f"| question {q_idx + 1}"
                         )
-                        this_question.click()
-                        page.wait_for_load_state("networkidle")
+                        logger.critical(error_output)
+                        raise RuntimeError(error_output)
 
-                        question_text = page.locator(
-                            question_output_text_selector
-                        ).inner_text()
-                        question_match = re.search(
-                            question_regex, question_text, re.MULTILINE
-                        )
-                        if not question_match:
-                            raise RuntimeError(f"{question_text=}, should match regex")
-                        question_parsed_dict = question_match.groupdict()
-                        logger.trace(f"{question_parsed_dict=}")
+                    return_btn.click()
+                    page.wait_for_load_state("networkidle")
 
-                        show_answer_btn = page.locator(answer_button_selector)
-                        if show_answer_btn.count() > 0:
-                            show_answer_btn.click()
-                            page.wait_for_timeout(300)
+                start_over_button = page.locator(start_over_button_selector)
+                assert start_over_button.count() > 0
+                start_over_button.click()
 
-                        answer_text = page.locator(
-                            answer_text_output_selector
-                        ).inner_text()
-                        answer_match = re.search(
-                            answer_regex, answer_text, re.MULTILINE
-                        )
-                        if not answer_match:
-                            raise RuntimeError(f"{answer_text=}, should match regex")
-                        answer_parsed_dict = answer_match.groupdict()
-                        logger.trace(f"{answer_parsed_dict=}")
-
-                        this_question_data = {
-                            "Dilemma Game Release": game_title.strip(),
-                            "Dilemma Year": year_label,
-                            "Category": question_parsed_dict["category"],
-                            "Points": question_parsed_dict["point_value"],
-                            "Question": question_parsed_dict["question"],
-                            "Answer": answer_parsed_dict["answer"],
-                        }
-                        scraped_data.append(this_question_data)
-                        logger.success(
-                            f"Completed question {q_idx + 1}/{initial_q_count}, appended to collection."
-                        )
-                        logger.trace(
-                            f"Completed question contents: {this_question_data=}"
-                        )
-                        logger.trace(
-                            f"Scraped data list now contains {len(scraped_data)} elements"
-                        )
-
-                        # Click "I was correct" or "I was incorrect" to return to the grid menu
-                        # TODO: I don't get how this works or if it's necessary at all. I don't get the logic. It seems like it goes back and forth answering one button or the other.
-                        #  Maybe based on load order? I don't know. Odd.
-
-                        return_btn = page.locator(correct_button_selector)
-                        if return_btn.count() > 0:
-                            return_btn.click()
-                        else:
-                            page.locator(incorrect_button_selector).click()
-
-                        page.wait_for_load_state("networkidle")
-
-                        q_idx += 1
-
-                    # MAYBE: also don't know what this is for, probably remove if works
-                    except Exception as e:
-                        logger.error(f"  Error processing question {q_idx + 1}: {e}")
-                        raise RuntimeError
-                        page.goto(BASE_URL)
-                        break
-
-            menu_btn = page.locator(menu_button_selector)
-            if menu_btn.count() > 0:
-                menu_btn.click()
-            else:
-                page.goto(BASE_URL)
+                board_idx += 1
+            tab_idx += 1
 
         df = pl.DataFrame(scraped_data)
         logger.success(f"{df.glimpse}")

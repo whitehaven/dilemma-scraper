@@ -1,4 +1,3 @@
-import asyncio
 import re
 import sys
 
@@ -19,12 +18,14 @@ answer_regex = (
     r"\s*A:( |\s)?(?P<answer>.*)(.|\s)*^(?P<category>[A-Z]*): (?P<point_value>\d\d)"
 )
 output_path = "doctors_dilemma_questions.csv"
+year_tab_selector = "a:has-text('20'), button:has-text('20'), a:has-text('Current')"
+board_tag_selector = "a[href*='board']:visible"
 
 
 def run():
 
     with sync_playwright() as p:
-        run_headless = True
+        run_headless = False
         browser = p.chromium.launch(headless=run_headless)
 
         context = browser.new_context()
@@ -35,9 +36,7 @@ def run():
 
         logger.debug(f"started browser, {run_headless=} (should be visible now)")
 
-        board_tag_seq = "a[href*='board']"
-
-        game_links = page.locator(board_tag_seq).all()
+        game_links = page.locator(board_tag_selector).all()
         game_count = len(game_links)
 
         if game_count == 0:
@@ -48,18 +47,40 @@ def run():
 
         scraped_data = []
 
+        year_tabs = page.locator(year_tab_selector).all()
+
+        logger.debug(f"Found {len(year_tabs)}")
+        logger.trace(f"{len(year_tabs)} tabs found, namely: {year_tabs=}")
+
+        if len(year_tabs) == 0:
+            raise RuntimeError(f"{len(year_tabs)=}, should be > 0")
+
+        for tab_idx in range(len(year_tabs)):
+            tabs = page.locator(
+                "a:has-text('20'), button:has-text('20'), a:has-text('Current')"
+            ).all()
+            year_label = tabs[tab_idx].inner_text()
+            logger.debug(f"Navigating to Year Tab: {year_label}")
+
+            tabs[tab_idx].click()
+            page.wait_for_load_state("networkidle")
+
+            visible_boards = page.locator(board_tag_selector).all()
+            board_count = len(visible_boards)
+            logger.debug(f"Found {board_count} visible boards for {year_label}.")
+
         for i in range(game_count):
             # Re-query game links to avoid stale elements after navigating back
-            games = page.locator(board_tag_seq).all()
-            if i >= len(games):
+            visible_boards = page.locator(board_tag_selector).all()
+            if i >= len(visible_boards):
                 logger.critical(f"{game_count=}, no boards detected to scrape")
                 raise RuntimeError(f"{game_count=}, no boards detected to scrape")
 
-            game_title = games[i].inner_text()
+            game_title = visible_boards[i].inner_text()
             logger.debug(f"\nProcessing Game [{i + 1}/{game_count}]: {game_title}")
 
             # Click into the game grid
-            games[i].click()
+            visible_boards[i].click()
             page.wait_for_load_state("networkidle")
 
             # Query grid cells / point links

@@ -1,7 +1,7 @@
 [project]
 name = "dilemma-scraper"
 version = "1.0.0dev1"
-description = "Add your description here"
+description = "Simple web scraper to retreive ACP Doctor's Dilemma jeopardy questions from posted examples."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [

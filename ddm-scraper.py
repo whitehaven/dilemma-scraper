@@ -70,7 +70,7 @@ def run():
 
             for i in range(len(visible_boards)):
                 # Re-query game links to avoid stale elements after navigating back
-                visible_boards = page.locator(board_tag_selector).all()
+                # visible_boards = page.locator(board_tag_selector).all()
                 if i >= len(visible_boards):
                     logger.critical(f"{visible_boards=}, no boards detected to scrape")
                     raise RuntimeError(f"{board_count=}, no boards detected to scrape")
@@ -88,12 +88,14 @@ def run():
                 logger.debug(f"Found {q_count} questions in this grid.")
 
                 # TODO: when runs off page to next year, can't find even though is listed (would be reachable through year links following Show:)
-
+                
+                grid_cells = page.locator(question_selector).all()
+                
                 for q_idx in range(q_count):
                     try:
-                        grid_cells = page.locator(question_selector).all()
-                        if q_idx >= len(grid_cells):
-                            break
+                        
+                        # if q_idx >= len(grid_cells):
+                            # break
 
                         # Click question point value
                         grid_cells[q_idx].click()
@@ -143,7 +145,7 @@ def run():
                             "Question": question_parsed_dict["question"],
                             "Answer": answer_parsed_dict["answer"],
                         }
-                        logger.debug(f"{this_question_data}")
+                        logger.debug(f"{this_question_data}") #TODO: describe better
                         scraped_data.append(this_question_data)
 
                         # Click "I was correct" or "I was incorrect" to return to the grid menu

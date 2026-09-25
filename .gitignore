@@ -9,8 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
-# dumb vscode stuff
+# dumb ide stuff I don't want to keep
 .vscode
+.idea
 
 # output data
 *.csv

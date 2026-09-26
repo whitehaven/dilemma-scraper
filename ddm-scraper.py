@@ -167,7 +167,9 @@ def run():
 
                 scraped_data.extend(rows)
                 write_csv(scraped_data)
-                logger.trace(f"wrote scraped_data, {len(scraped_data)=} acquired so far in case of crash")
+                logger.trace(
+                    f"wrote scraped_data, {len(scraped_data)=} acquired so far in case of crash"
+                )
 
         write_csv(scraped_data)
 
@@ -175,9 +177,11 @@ def run():
         logger.success(
             f"Collected {len(df)} questions from {len(scraped_board_ids)} boards."
         )
-        logger.success(f"Successfully wrote {len(df)} question-answer sets to {output_path}")
+        logger.success(
+            f"Successfully wrote {len(df)} question-answer sets to {output_path}"
+        )
 
-        #TODO quantify weirdos and missing image ones so we can grab them
+        # TODO quantify weirdos and missing image ones so we can grab them
 
         browser.close()
 
@@ -341,7 +345,7 @@ def scrape_board(
     q_idx = 0
 
     for this_board_pos in board_positions:
-        q_idx += 1# TODO fix
+        q_idx += 1  # TODO fix
         parsed_dict = extract_question_and_answer(
             initial_q_count, page, q_idx, board, this_board_pos
         )
@@ -356,7 +360,7 @@ def scrape_board(
         }
         rows.append(this_question_data)
 
-        logger.info( #TODO info
+        logger.info(  # TODO info
             f"Completed question {q_idx}/{initial_q_count}, collected "
             f"{len(rows)} questions from this board."
         )

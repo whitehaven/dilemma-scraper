@@ -153,6 +153,7 @@ def run():
                 page.wait_for_load_state("networkidle")
 
                 board_idx += 1
+            pl.DataFrame(scraped_data).write_csv(output_path)
             tab_idx += 1
 
         df = pl.DataFrame(scraped_data)

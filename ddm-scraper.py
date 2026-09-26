@@ -34,7 +34,7 @@ correct_button_selector = (
 
 
 def run():
-    #TODO gets stuck reliably on board 2 of 2025, gets a completion screen and wants to find more questions; maybe reassignment because should only have one query ever
+    # TODO gets stuck reliably on board 2 of 2025, gets a completion screen and wants to find more questions; maybe reassignment because should only have one query ever
     with sync_playwright() as p:
         run_headless = False
         browser = p.chromium.launch(headless=run_headless)
@@ -53,7 +53,6 @@ def run():
             raise RuntimeError(f"{len(year_tabs)=}, should be > 0")
 
         logger.debug(f"Found {initial_tab_count} year tabs.")
-        logger.trace(f"{initial_tab_count} total tabs found, namely: {year_tabs=}")
 
         tab_idx = 0
         scraped_data = []
@@ -107,9 +106,7 @@ def run():
                 while question_buttons:
                     this_question = question_buttons.pop()
 
-                    logger.trace(
-                        f"Clicking question {q_idx + 1}/{initial_q_count}, {this_question=}"
-                    )
+                    logger.trace(f"Clicking question {q_idx + 1}/{initial_q_count}")
                     this_question.click()
                     page.wait_for_load_state("networkidle")
 
@@ -173,6 +170,7 @@ def run():
                 start_over_button = page.locator(start_over_button_selector)
                 assert start_over_button.count() > 0
                 start_over_button.click()
+                page.wait_for_load_state("networkidle")
 
                 board_idx += 1
             tab_idx += 1

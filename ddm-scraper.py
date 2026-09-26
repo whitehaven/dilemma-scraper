@@ -1,12 +1,12 @@
 import re
 import sys
+from typing import Any
 
 import polars as pl
 from loguru import logger
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import Locator, Page, sync_playwright
 
 logger.remove()
-
 logger.add(sys.stderr, level="TRACE")
 
 BASE_URL = "https://ddm.acponline.org/"
@@ -31,12 +31,12 @@ incorrect_button_selector = (
 correct_button_selector = (
     "button:has-text('I was correct'), input[value='I was correct']"
 )
+run_headless = False
 
 
 def run():
     # TODO gets stuck reliably on board 2 of 2025, gets a completion screen and wants to find more questions; maybe reassignment because should only have one query ever
     with sync_playwright() as p:
-        run_headless = False
         browser = p.chromium.launch(headless=run_headless)
         context = browser.new_context()
         page = context.new_page()
@@ -106,32 +106,11 @@ def run():
                 while question_buttons:
                     this_question = question_buttons.pop()
 
-                    logger.trace(f"Clicking question {q_idx + 1}/{initial_q_count}")
-                    this_question.click()
-                    page.wait_for_load_state("networkidle")
-
-                    question_text = page.locator(
-                        question_output_text_selector
-                    ).inner_text()
-                    question_match = re.search(
-                        question_regex, question_text, re.MULTILINE
+                    answer_parsed_dict, question_parsed_dict = (
+                        extract_question_and_answer(
+                            initial_q_count, page, q_idx, this_question
+                        )
                     )
-                    if not question_match:
-                        raise RuntimeError(f"{question_text=}, should match regex")
-                    question_parsed_dict = question_match.groupdict()
-                    logger.trace(f"{question_parsed_dict=}")
-
-                    show_answer_btn = page.locator(answer_button_selector)
-                    if show_answer_btn.count() > 0:
-                        show_answer_btn.click()
-                        page.wait_for_timeout(300)
-
-                    answer_text = page.locator(answer_text_output_selector).inner_text()
-                    answer_match = re.search(answer_regex, answer_text, re.MULTILINE)
-                    if not answer_match:
-                        raise RuntimeError(f"{answer_text=}, should match regex")
-                    answer_parsed_dict = answer_match.groupdict()
-                    logger.trace(f"{answer_parsed_dict=}")
 
                     this_question_data = {
                         "Dilemma Game Release": this_board_label.strip(),
@@ -142,6 +121,7 @@ def run():
                         "Answer": answer_parsed_dict["answer"],
                     }
                     scraped_data.append(this_question_data)
+
                     logger.success(
                         f"Completed question {q_idx + 1}/{initial_q_count}, appended to collection of {len(scraped_data)} questions."
                     )
@@ -182,6 +162,35 @@ def run():
         logger.success(f"Successfully exported questions and answers to {output_path}")
 
         browser.close()
+
+
+def extract_question_and_answer(
+    initial_q_count: int, page: Page, q_idx: int, this_question: Locator
+) -> tuple[dict[str, str | Any], dict[str, str | Any]]:
+    logger.trace(f"Clicking question {q_idx + 1}/{initial_q_count}")
+    this_question.click()
+    page.wait_for_load_state("networkidle")
+
+    question_text = page.locator(question_output_text_selector).inner_text()
+    question_match = re.search(question_regex, question_text, re.MULTILINE)
+    if not question_match:
+        raise RuntimeError(f"{question_text=}, should match regex")
+    question_parsed_dict = question_match.groupdict()
+    logger.trace(f"{question_parsed_dict=}")
+
+    show_answer_btn = page.locator(answer_button_selector)
+    if show_answer_btn.count() > 0:
+        show_answer_btn.click()
+        page.wait_for_timeout(300)
+
+    answer_text = page.locator(answer_text_output_selector).inner_text()
+    answer_match = re.search(answer_regex, answer_text, re.MULTILINE)
+    if not answer_match:
+        raise RuntimeError(f"{answer_text=}, should match regex")
+    answer_parsed_dict = answer_match.groupdict()
+    logger.trace(f"{answer_parsed_dict=}")
+
+    return answer_parsed_dict, question_parsed_dict
 
 
 if __name__ == "__main__":
